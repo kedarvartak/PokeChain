@@ -6,92 +6,83 @@ import { pokemonService } from '../services/PokeService';
 const PokemonContext = createContext();
 
 export const starterPokemon = [
-  { id: 1, name: 'Bulbasaur', type: 'Grass', image: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png' },
-  { id: 4, name: 'Charmander', type: 'Fire', image: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/4.png' },
-  { id: 7, name: 'Squirtle', type: 'Water', image: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/7.png' }
+  { 
+    id: 1, 
+    name: 'Bulbasaur', 
+    type: 'Grass', 
+    image: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png' 
+  },
+  { 
+    id: 4, 
+    name: 'Charmander', 
+    type: 'Fire', 
+    image: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/4.png' 
+  },
+  { 
+    id: 7, 
+    name: 'Squirtle', 
+    type: 'Water', 
+    image: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/7.png' 
+  }
 ];
 
-export const PokemonProvider = ({ children }) => {
-  const { address, isConnected } = useWallet();
-  const [isNewUser, setIsNewUser] = useState(null);
+export function PokemonProvider({ children }) {
   const [userPokemon, setUserPokemon] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [isNewUser, setIsNewUser] = useState(false);
+  const { isConnected, address } = useWallet();
 
-  // Check user status and load Pokemon when wallet connects
   useEffect(() => {
-    const checkUserStatus = async () => {
-      if (isConnected && address) {
-        try {
-          setLoading(true);
-          setError(null);
-          
-          // Check if user has starter Pokemon using the contract
-          const isNew = await pokemonService.isNewUser(address);
-          setIsNewUser(isNew);
-          
-          if (!isNew) {
-            // If user has Pokemon, fetch them from the contract
-            const userPokemonData = await pokemonService.getUserPokemon(address);
-            setUserPokemon(userPokemonData);
-          } else {
-            setUserPokemon([]);
-          }
-        } catch (error) {
-          console.error('Error checking user status:', error);
-          setError(error.message);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        // Reset state when wallet disconnects
-        setIsNewUser(null);
+    const fetchUserStatus = async () => {
+      if (!isConnected || !address) {
         setUserPokemon([]);
+        setIsNewUser(false);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // First check if user is new
+        const newUserStatus = await pokemonService.isNewUser(address);
+        setIsNewUser(newUserStatus);
+
+        // If not a new user, fetch their Pokemon
+        if (!newUserStatus) {
+          const pokemon = await pokemonService.getUserPokemon(address);
+          setUserPokemon(pokemon);
+        } else {
+          setUserPokemon([]);
+        }
+      } catch (error) {
+        console.error('Error fetching user status:', error);
+        setUserPokemon([]);
+      } finally {
         setLoading(false);
       }
     };
 
-    checkUserStatus();
+    fetchUserStatus();
   }, [isConnected, address]);
 
-  const selectStarterPokemon = async (pokemonId) => {
-    try {
-      setLoading(true);
-      setError(null);
-  
-      // Get contract instance from pokemonService
-      const contract = await pokemonService.getContract(true);
-      
-      // Mint the starter Pokemon NFT
-      const result = await pokemonService.mintStarterPokemon(pokemonId);
-      
-      // Update state with the minted Pokemon
-      setIsNewUser(false);
-      setUserPokemon([result.pokemon]);
-      
-    } catch (error) {
-      console.error('Error selecting starter Pokemon:', error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
+  const refreshPokemon = async () => {
+    if (address) {
+      const pokemon = await pokemonService.getUserPokemon(address);
+      setUserPokemon(pokemon);
     }
   
   };
 
   return (
-    <PokemonContext.Provider
-      value={{
-        isNewUser,
-        userPokemon,
-        loading,
-        error,
-        selectStarterPokemon,
-        starterPokemon
-      }}
-    >
+    <PokemonContext.Provider value={{ 
+      userPokemon, 
+      loading, 
+      isNewUser,
+      refreshPokemon
+    }}>
       {children}
     </PokemonContext.Provider>
   );
-};
+}
 
 export const usePokemon = () => useContext(PokemonContext);

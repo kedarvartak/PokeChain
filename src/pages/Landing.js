@@ -5,7 +5,26 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { WalletProvider } from '../context/WalletContext';
 
-
+const FEATURED_POKEMON = [
+  {
+    id: 3,
+    name: "Venusaur",
+    
+    image: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/3.png"
+  },
+  {
+    id: 6,
+    name: "Charizard",
+    
+    image: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png"
+  },
+  {
+    id: 9,
+    name: "Blastoise",
+    
+    image: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/9.png"
+  }
+];
 
 function Landing() {
   return (
@@ -56,19 +75,27 @@ function Landing() {
             </div>
           </div>
 
+          
           {/* Featured Pokemon */}
-          <div className="grid grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {[1, 2, 3].map((item) => (
-              <motion.div
-                key={item}
-                whileHover={{ rotate: -2, scale: 1.05 }}
-                className="bg-white border-4 border-black p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
-              >
-                <div className="aspect-square bg-[#FFE5E5] border-2 border-black"></div>
-                <h3 className="mt-4 font-bold text-xl text-center">POKEMON #{item}</h3>
-              </motion.div>
-            ))}
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
+        {FEATURED_POKEMON.map((pokemon, index) => (
+          <motion.div
+            key={pokemon.id}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: index * 0.2 }}
+            className="bg-white border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+          >
+            <img 
+              src={pokemon.image} 
+              alt={pokemon.name}
+              className="w-48 h-48 mx-auto mb-4 object-contain"
+            />
+            <h2 className="text-2xl font-black text-center mb-2">{pokemon.name}</h2>
+            
+          </motion.div>
+        ))}
+      </div>
         </motion.div>
       </div>
 

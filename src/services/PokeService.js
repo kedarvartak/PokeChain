@@ -2,7 +2,7 @@
 import { ethers } from 'ethers';
 import PokemonNFTJson from '../artifacts/contracts/PokeContract.sol/PokemonNFT.json';
 const PokemonNFTAbi = PokemonNFTJson.abi;
-const CONTRACT_ADDRESS = '0x572316aC11CB4bc5daf6BDae68f43EA3CCE3aE0e'; 
+const CONTRACT_ADDRESS = '0x94fFA1C7330845646CE9128450F8e6c3B5e44F86'; 
 
 const LINEA_SEPOLIA_CONFIG = {
   chainId: '0xE705', // 59141 in hex
@@ -65,46 +65,57 @@ export const pokemonService = {
   // Check if user is new (doesn't have starter Pokemon)
   async isNewUser(address) {
     try {
+      console.log('PokeService: Checking if user is new:', address);
       const contract = await this.getContract();
       const hasStarter = await contract.hasStarterPokemon(address);
+      console.log('PokeService: Has starter pokemon:', hasStarter);
       return !hasStarter;
     } catch (error) {
-      console.error('Error checking user status:', error);
-      throw new Error('Failed to check user status');
+      console.error('PokeService: Error checking user status:', error);
+      throw error;
     }
   },
 
   // Get user's Pokemon
   async getUserPokemon(address) {
     try {
+      console.log('PokeService: Fetching Pokemon for address:', address);
       const contract = await this.getContract();
       
-      // Get all possible starter Pokemon IDs
-      const starterIds = [1, 4, 7]; // Bulbasaur, Charmander, Squirtle
+      const starterIds = [1, 4, 7];
       const userPokemon = [];
 
-      // Check each Pokemon ID
       for (const id of starterIds) {
-        const balance = await contract.balanceOf(address, id);
-        if (balance > 0) {
-          // Get Pokemon data from contract
-          const pokemonData = await contract.getPokemonData(id);
-          userPokemon.push({
-            id,
-            name: pokemonData.name,
-            type: pokemonData.pokemonType,
-            level: Number(pokemonData.level),
-            xp: Number(pokemonData.xp),
-            // Add URI for metadata/image
-            uri: await contract.uri(id)
-          });
+        try {
+          console.log(`PokeService: Checking balance for Pokemon ${id}`);
+          const balance = await contract.balanceOf(address, id);
+          console.log(`PokeService: Balance for Pokemon ${id}:`, balance);
+          
+          if (balance > 0n) {
+            console.log(`PokeService: Fetching data for Pokemon ${id}`);
+            const pokemonData = await contract.getPokemonData(id);
+            console.log(`PokeService: Pokemon ${id} data:`, pokemonData);
+            
+            userPokemon.push({
+              id,
+              name: pokemonData.name,
+              type: pokemonData.pokemonType,
+              level: Number(pokemonData.level),
+              xp: Number(pokemonData.xp),
+              isTraining: pokemonData.isTraining,
+              trainingStartTime: Number(pokemonData.trainingStartTime)
+            });
+          }
+        } catch (err) {
+          console.error(`PokeService: Error checking Pokemon ${id}:`, err);
         }
       }
       
+      console.log('PokeService: Final user Pokemon array:', userPokemon);
       return userPokemon;
     } catch (error) {
-      console.error('Error getting user Pokemon:', error);
-      throw new Error('Failed to fetch your Pokemon');
+      console.error('PokeService: Error in getUserPokemon:', error);
+      throw error;
     }
   },
 
@@ -195,5 +206,51 @@ export const pokemonService = {
       console.error('Error fetching Pokemon metadata:', error);
       throw new Error('Failed to fetch Pokemon metadata');
     }
+  },
+
+  async startTraining(pokemonId, groundId) {
+    try {
+      const contract = await this.getContract(true);
+      const gasEstimate = await contract.startTraining.estimateGas(pokemonId, groundId);
+      const gasLimit = gasEstimate * 120n / 100n;
+
+      const tx = await contract.startTraining(pokemonId, groundId, { gasLimit });
+      const receipt = await tx.wait();
+
+      return {
+        success: true,
+        transactionHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Error starting training:', error);
+      if (error.message.includes('user rejected')) {
+        throw new Error('Transaction was rejected');
+      }
+      throw new Error('Failed to start training');
+    }
+  },
+
+  async endTraining(pokemonId, groundId) {
+    try {
+      const contract = await this.getContract(true);
+      const gasEstimate = await contract.endTraining.estimateGas(pokemonId, groundId);
+      const gasLimit = gasEstimate * 120n / 100n;
+
+      const tx = await contract.endTraining(pokemonId, groundId, { gasLimit });
+      const receipt = await tx.wait();
+
+      return {
+        success: true,
+        transactionHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Error ending training:', error);
+      if (error.message.includes('user rejected')) {
+        throw new Error('Transaction was rejected');
+      }
+      throw new Error('Failed to end training');
+    }
   }
 };
+
+export default pokemonService;

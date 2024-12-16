@@ -8,17 +8,19 @@ import {
   HomeIcon, 
   ShoppingBagIcon, 
   UserIcon, 
-  DocumentTextIcon 
+  DocumentTextIcon,
+  SparklesIcon
 } from '@heroicons/react/24/solid';
-import { useWallet } from '../context/WalletContext'; // Add this import
+import { useWallet } from '../context/WalletContext'; 
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { isConnected, address, connectWallet, error } = useWallet(); // Add this hook
+  const { isConnected, address, connectWallet, error } = useWallet(); 
 
   const menuItems = [
     { name: 'HOME', icon: <HomeIcon className="w-6 h-6" />, to: '/' },
     { name: 'MARKETPLACE', icon: <ShoppingBagIcon className="w-6 h-6" />, to: '/marketplace' },
+    { name: 'TRAINING', icon: <SparklesIcon className="w-6 h-6" />, to: '/training' },
     { name: 'DOCS', icon: <DocumentTextIcon className="w-6 h-6" />, to: '/docs' },
     { name: 'PROFILE', icon: <UserIcon className="w-6 h-6" />, to: '/profile' },
   ];
@@ -35,7 +37,7 @@ const Navbar = () => {
       <div className="bg-white border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] m-4">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center py-4">
-            {/* ... Logo section remains the same ... */}
+            
             <Link to="/" className="text-3xl font-bold">POKECHAIN</Link>
 
             {/* Desktop Menu Items */}
@@ -93,17 +95,17 @@ const Navbar = () => {
       >
         <div className="px-4 py-4 space-y-4">
           {menuItems.map((item) => (
-            <motion.a
-              key={item.name}
-              href={item.href}
-              whileHover={{ scale: 1.02, x: 4 }}
-              className={`flex items-center space-x-3 font-black p-3 ${item.color} border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]`}
-            >
-              <div className="bg-white p-2 border-2 border-black">
-                {item.icon}
-              </div>
-              <span>{item.name}</span>
-            </motion.a>
+            <motion.div key={item.name}>
+              <Link
+                to={item.to}
+                className={`flex items-center space-x-3 font-black p-3 ${item.color} border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]`}
+              >
+                <div className="bg-white p-2 border-2 border-black">
+                  {item.icon}
+                </div>
+                <span>{item.name}</span>
+              </Link>
+            </motion.div>
           ))}
           
           {/* Mobile Connect Wallet Button */}

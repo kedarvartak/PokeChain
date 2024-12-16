@@ -1,10 +1,15 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useWallet } from '../context/WalletContext';
-import { usePokemon } from '../context/PokemonContext';
+import { usePokemon, starterPokemon } from '../context/PokemonContext';
 import { useMarketplace } from '../context/MarketplaceContext';
-import { Navigate } from 'react-router-dom';
+
 import PokemonCard from '../components/PokemonCard';
+import TrainingProgress from '../components/TrainingProgress';
+import { useTraining } from '../context/TrainingContext';
+import { toast } from 'react-hot-toast';
+import { pokemonService } from '../services/PokeService';
 
 const ITEM_IMAGES = {
   1: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png',
@@ -15,8 +20,19 @@ const ITEM_IMAGES = {
 
 const Profile = () => {
   const { isConnected } = useWallet();
-  const { isNewUser, loading, userPokemon } = usePokemon();
+  const { isNewUser, loading, userPokemon, refreshPokemon } = usePokemon();
   const { userItems } = useMarketplace();
+  const { trainingPokemon } = useTraining();
+
+  const handleSelectStarter = async (pokemonId) => {
+    try {
+      await pokemonService.mintStarterPokemon(pokemonId);
+      await refreshPokemon(); // Refresh Pokemon list after minting
+      toast.success('Starter Pokemon claimed successfully!');
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
 
   if (!isConnected) {
     return <Navigate to="/" />;
@@ -32,8 +48,34 @@ const Profile = () => {
     );
   }
 
-  if (isNewUser === true) {
-    return <Navigate to="/" />;
+  if (isNewUser) {
+    return (
+      <div className="py-20 max-w-7xl mx-auto pt-36 px-4">
+        <div className="text-center mb-12">
+          <h2 className="text-4xl font-black inline-block bg-[#FFD93D] border-4 border-black p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            CHOOSE YOUR STARTER POKEMON
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {starterPokemon.map((pokemon) => (
+            <motion.div
+              key={pokemon.id}
+              whileHover={{ scale: 1.05 }}
+              className="bg-white border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] cursor-pointer"
+              onClick={() => handleSelectStarter(pokemon.id)}
+            >
+              <img
+                src={pokemon.image}
+                alt={pokemon.name}
+                className="w-32 h-32 mx-auto mb-4"
+              />
+              <h3 className="text-2xl font-black text-center mb-2">{pokemon.name}</h3>
+              <p className="text-center font-bold">Type: {pokemon.type}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (!userPokemon || userPokemon.length === 0) {
@@ -74,6 +116,26 @@ const Profile = () => {
           </motion.div>
         ))}
       </div>
+
+      {/* Training Progress */}
+      {Object.keys(trainingPokemon).length > 0 && (
+        <div className="mb-12">
+          <h2 className="text-3xl font-black mb-6">
+            <span className="bg-[#4ECDC4] border-4 border-black p-4 inline-block shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              ACTIVE TRAINING
+            </span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Object.entries(trainingPokemon).map(([pokemonId, data]) => (
+              <TrainingProgress
+                key={pokemonId}
+                pokemon={userPokemon.find(p => p.id === Number(pokemonId))}
+                groundId={data.groundId}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pokemon Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
