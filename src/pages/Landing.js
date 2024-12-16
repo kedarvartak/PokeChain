@@ -154,7 +154,7 @@ function Landing() {
           </div>
         </div>
       </section>
-      <Footer />
+      
     </div>
     </WalletProvider>
   );

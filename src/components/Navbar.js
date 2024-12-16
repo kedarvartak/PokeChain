@@ -1,6 +1,7 @@
 // components/Navbar.js
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Bars3Icon, 
   XMarkIcon, 
@@ -16,10 +17,10 @@ const Navbar = () => {
   const { isConnected, address, connectWallet, error } = useWallet(); // Add this hook
 
   const menuItems = [
-    { name: 'HOME', icon: <HomeIcon className="w-6 h-6" />, href: '/' },
-    { name: 'MARKETPLACE', icon: <ShoppingBagIcon className="w-6 h-6" />, href: '/marketplace' },
-    { name: 'DOCS', icon: <DocumentTextIcon className="w-6 h-6" />, href: '/docs' },
-    { name: 'PROFILE', icon: <UserIcon className="w-6 h-6" />, href: '/profile' },
+    { name: 'HOME', icon: <HomeIcon className="w-6 h-6" />, to: '/' },
+    { name: 'MARKETPLACE', icon: <ShoppingBagIcon className="w-6 h-6" />, to: '/marketplace' },
+    { name: 'DOCS', icon: <DocumentTextIcon className="w-6 h-6" />, to: '/docs' },
+    { name: 'PROFILE', icon: <UserIcon className="w-6 h-6" />, to: '/profile' },
   ];
 
   // Format address for display
@@ -35,20 +36,20 @@ const Navbar = () => {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center py-4">
             {/* ... Logo section remains the same ... */}
-            <h1 className="text-3xl font-bold">POKECHAIN</h1>
+            <Link to="/" className="text-3xl font-bold">POKECHAIN</Link>
 
             {/* Desktop Menu Items */}
             <div className="hidden md:flex items-center space-x-6">
               {menuItems.map((item) => (
-                <motion.a
-                  key={item.name}
-                  href={item.href}
-                  whileHover={{ rotate: -2, scale: 1.05 }}
-                  className={`flex items-center space-x-2 font-black px-4 py-2 ${item.color} border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]`}
-                >
-                  {item.icon}
-                  <span>{item.name}</span>
-                </motion.a>
+                <motion.div key={item.name}>
+                  <Link
+                    to={item.to}
+                    className={`flex items-center space-x-2 font-black px-4 py-2 ${item.color} border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px]`}
+                  >
+                    {item.icon}
+                    <span>{item.name}</span>
+                  </Link>
+                </motion.div>
               ))}
             </div>
 
