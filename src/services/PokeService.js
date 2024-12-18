@@ -2,7 +2,7 @@
 import { ethers } from 'ethers';
 import PokemonNFTJson from '../artifacts/contracts/PokeContract.sol/PokemonNFT.json';
 const PokemonNFTAbi = PokemonNFTJson.abi;
-const CONTRACT_ADDRESS = '0x94fFA1C7330845646CE9128450F8e6c3B5e44F86'; 
+const CONTRACT_ADDRESS = '0xd30bF3219A0416602bE8D482E0396eF332b0494E'; 
 
 const LINEA_SEPOLIA_CONFIG = {
   chainId: '0xE705', // 59141 in hex
@@ -48,9 +48,14 @@ export const pokemonService = {
   // Get contract instance
   async getContract(withSigner = false) {
     try {
-      console.log('Getting contract with ABI:', PokemonNFTAbi);
       await this.ensureLineaSepoliaNetwork();
-      const provider = new ethers.BrowserProvider(window.ethereum);
+      const provider = new ethers.BrowserProvider(window.ethereum, {
+        name: 'Linea Sepolia',
+        chainId: 59141
+      });
+
+      console.log('Getting contract with ABI:', PokemonNFTAbi);
+      
       if (withSigner) {
         const signer = await provider.getSigner();
         return new ethers.Contract(CONTRACT_ADDRESS, PokemonNFTAbi, signer);
@@ -233,15 +238,28 @@ export const pokemonService = {
   async endTraining(pokemonId, groundId) {
     try {
       const contract = await this.getContract(true);
+      
+      // First get current Pokemon data to calculate XP gain
+      const pokemonData = await contract.getPokemonData(pokemonId);
+      const startTime = Number(pokemonData.trainingStartTime);
+      const currentTime = Math.floor(Date.now() / 1000);
+      
+      // Calculate XP gained (1 XP per minute, max 100)
+      const minutesTrained = Math.floor((currentTime - startTime) / 60);
+      const xpGained = Math.min(minutesTrained, 100); // Cap at 100 XP
+      
+      // Estimate gas for the transaction
       const gasEstimate = await contract.endTraining.estimateGas(pokemonId, groundId);
       const gasLimit = gasEstimate * 120n / 100n;
 
+      // End training and update XP in the same transaction
       const tx = await contract.endTraining(pokemonId, groundId, { gasLimit });
       const receipt = await tx.wait();
 
       return {
         success: true,
-        transactionHash: receipt.hash
+        transactionHash: receipt.hash,
+        xpGained
       };
     } catch (error) {
       console.error('Error ending training:', error);
@@ -249,6 +267,36 @@ export const pokemonService = {
         throw new Error('Transaction was rejected');
       }
       throw new Error('Failed to end training');
+    }
+  },
+
+  // Add a new method to get real-time XP calculation
+  async getCurrentTrainingXP(pokemonId) {
+    try {
+      const contract = await this.getContract();
+      console.log('Calculating XP for Pokemon:', pokemonId);
+      
+      // First check if Pokemon is actually training
+      const pokemonData = await contract.getPokemonData(pokemonId);
+      if (!pokemonData.isTraining) {
+        return pokemonData.xp;
+      }
+
+      // Get current XP including training progress
+      const currentXP = await contract.calculateCurrentXP(pokemonId, 1); // Using BASIC_TRAINING (1)
+      console.log('Current XP calculated:', currentXP);
+      return Number(currentXP);
+    } catch (error) {
+      console.error('Error calculating current XP:', error);
+      // Return the last known XP in case of error
+      try {
+        const contract = await this.getContract();
+        const pokemonData = await contract.getPokemonData(pokemonId);
+        return Number(pokemonData.xp);
+      } catch (fallbackError) {
+        console.error('Fallback error:', fallbackError);
+        return 0;
+      }
     }
   }
 };

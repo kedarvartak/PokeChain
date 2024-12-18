@@ -34,8 +34,9 @@ contract PokemonNFT is ERC1155, Ownable {
     uint256 public constant WATER_TEMPLE = 3;
     uint256 public constant GRASS_GARDEN = 4;
     
-    uint256 public constant MIN_TRAINING_TIME = 1 hours;
+    uint256 public constant MIN_TRAINING_TIME = 1 minutes;
     uint256 public constant TYPE_BONUS_MULTIPLIER = 150;
+    uint256 public constant XP_PER_MINUTE = 1;
     
     string private baseURI;
     
@@ -47,10 +48,10 @@ contract PokemonNFT is ERC1155, Ownable {
         pokemonData[4] = Pokemon("Charmander", "Fire", 5, 0, 0, false);
         pokemonData[7] = Pokemon("Squirtle", "Water", 5, 0, 0, false);
         
-        trainingGrounds[BASIC_TRAINING] = TrainingGround("Basic Training", 10, "", 1);
-        trainingGrounds[FIRE_DOJO] = TrainingGround("Fire Dojo", 20, "Fire", 5);
-        trainingGrounds[WATER_TEMPLE] = TrainingGround("Water Temple", 20, "Water", 5);
-        trainingGrounds[GRASS_GARDEN] = TrainingGround("Grass Garden", 20, "Grass", 5);
+        trainingGrounds[BASIC_TRAINING] = TrainingGround("Basic Training", 60, "", 1);
+        trainingGrounds[FIRE_DOJO] = TrainingGround("Fire Dojo", 120, "Fire", 5);
+        trainingGrounds[WATER_TEMPLE] = TrainingGround("Water Temple", 120, "Water", 5);
+        trainingGrounds[GRASS_GARDEN] = TrainingGround("Grass Garden", 120, "Grass", 5);
     }
     
     function mintStarterPokemon(uint256 pokemonId) external {
@@ -72,6 +73,23 @@ contract PokemonNFT is ERC1155, Ownable {
         emit TrainingStarted(pokemonId, groundId, block.timestamp);
     }
     
+    function calculateCurrentXP(uint256 pokemonId, uint256 groundId) public view returns (uint256) {
+        Pokemon memory pokemon = pokemonData[pokemonId];
+        if (!pokemon.isTraining) return pokemon.xp;
+        
+        uint256 trainingTime = block.timestamp - pokemon.trainingStartTime;
+        uint256 minutesSpent = trainingTime / 1 minutes;
+        
+        uint256 baseXP = minutesSpent * XP_PER_MINUTE;
+        
+        if (keccak256(bytes(pokemon.pokemonType)) == 
+            keccak256(bytes(trainingGrounds[groundId].requiredType))) {
+            baseXP = (baseXP * TYPE_BONUS_MULTIPLIER) / 100;
+        }
+        
+        return pokemon.xp + baseXP;
+    }
+    
     function endTraining(uint256 pokemonId, uint256 groundId) external {
         require(balanceOf(msg.sender, pokemonId) > 0, "Not your Pokemon");
         require(pokemonData[pokemonId].isTraining, "Not training");
@@ -79,9 +97,9 @@ contract PokemonNFT is ERC1155, Ownable {
                 "Min training time not met");
         
         uint256 trainingTime = block.timestamp - pokemonData[pokemonId].trainingStartTime;
-        uint256 hoursSpent = trainingTime / 1 hours;
+        uint256 minutesSpent = trainingTime / 1 minutes;
         
-        uint256 baseXP = hoursSpent * trainingGrounds[groundId].xpPerHour;
+        uint256 baseXP = minutesSpent * XP_PER_MINUTE;
         
         if (keccak256(bytes(pokemonData[pokemonId].pokemonType)) == 
             keccak256(bytes(trainingGrounds[groundId].requiredType))) {

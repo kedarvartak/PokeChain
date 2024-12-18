@@ -11,7 +11,7 @@ import Training from './pages/Training';
 import { NotificationProvider } from './context/NotificationContext';
 import { TrainingProvider } from './context/TrainingContext';
 import Documentation from './pages/Documentation';
-
+import ScrollToTop from './components/ScrollToTop';
 function App() {
   return (
     <Router>
@@ -20,6 +20,7 @@ function App() {
           <PokemonProvider>
             <TrainingProvider>
               <MarketplaceProvider>
+                <ScrollToTop />
                 <div className="min-h-screen bg-gray-100">
                   <Navbar />
                   <Routes>

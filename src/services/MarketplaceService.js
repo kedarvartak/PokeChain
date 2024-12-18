@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import PokemonItemsJson from '../artifacts/contracts/PokemonItems.sol/PokemonItems.json';
 
 const PokemonItemsAbi = PokemonItemsJson.abi;
-const ITEMS_CONTRACT_ADDRESS = '0x8ac87219a0F5639BC01b470F87BA2b26356CB2B9';
+const ITEMS_CONTRACT_ADDRESS = '0xd710a67624Ad831683C86a48291c597adE30F787';
 
 export const marketplaceService = {
   async getContract(withSigner = false) {
