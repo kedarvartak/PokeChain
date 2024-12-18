@@ -12,30 +12,34 @@ import { NotificationProvider } from './context/NotificationContext';
 import { TrainingProvider } from './context/TrainingContext';
 import Documentation from './pages/Documentation';
 import ScrollToTop from './components/ScrollToTop';
+import { PokeCoinProvider } from './context/PokeCoinContext';
+
 function App() {
   return (
     <Router>
       <WalletProvider>
-        <NotificationProvider>
-          <PokemonProvider>
-            <TrainingProvider>
-              <MarketplaceProvider>
-                <ScrollToTop />
-                <div className="min-h-screen bg-gray-100">
-                  <Navbar />
-                  <Routes>
-                    <Route path="/" element={<Landing />} />
-                    <Route path="/marketplace" element={<Marketplace />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/training" element={<Training />} />
-                    <Route path="/docs" element={<Documentation />} />
-                  </Routes>
-                  <Footer/>
-                </div>
-              </MarketplaceProvider>
-            </TrainingProvider>
-          </PokemonProvider>
-        </NotificationProvider>
+        <PokeCoinProvider>
+          <NotificationProvider>
+            <PokemonProvider>
+              <TrainingProvider>
+                <MarketplaceProvider>
+                  <ScrollToTop />
+                  <div className="min-h-screen bg-gray-100">
+                    <Navbar />
+                    <Routes>
+                      <Route path="/" element={<Landing />} />
+                      <Route path="/marketplace" element={<Marketplace />} />
+                      <Route path="/profile" element={<Profile />} />
+                      <Route path="/training" element={<Training />} />
+                      <Route path="/docs" element={<Documentation />} />
+                    </Routes>
+                    <Footer/>
+                  </div>
+                </MarketplaceProvider>
+              </TrainingProvider>
+            </PokemonProvider>
+          </NotificationProvider>
+        </PokeCoinProvider>
       </WalletProvider>
     </Router>
   );

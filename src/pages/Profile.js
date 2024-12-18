@@ -44,10 +44,13 @@ const Profile = () => {
 
   const handleSelectStarter = async (pokemonId) => {
     try {
+      console.log('Attempting to mint starter Pokemon:', pokemonId);
       await pokemonService.mintStarterPokemon(pokemonId);
+      console.log('Minting successful, refreshing Pokemon list');
       await refreshPokemon(); // Refresh Pokemon list after minting
       toast.success('Starter Pokemon claimed successfully!');
     } catch (error) {
+      console.error('Error minting starter:', error);
       toast.error(error.message);
     }
   };

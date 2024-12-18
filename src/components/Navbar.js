@@ -12,6 +12,7 @@ import {
   SparklesIcon
 } from '@heroicons/react/24/solid';
 import { useWallet } from '../context/WalletContext'; 
+import CoinBalance from './CoinBalance';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);

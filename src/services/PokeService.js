@@ -1,304 +1,324 @@
 // src/services/PokeService.js
 import { ethers } from 'ethers';
-import PokemonNFTJson from '../artifacts/contracts/PokeContract.sol/PokemonNFT.json';
-const PokemonNFTAbi = PokemonNFTJson.abi;
-const CONTRACT_ADDRESS = '0xd30bF3219A0416602bE8D482E0396eF332b0494E'; 
+import PokemonNFT from '../artifacts/contracts/PokeContract.sol/PokemonNFT.json';
 
-const LINEA_SEPOLIA_CONFIG = {
-  chainId: '0xE705', // 59141 in hex
-  chainName: 'Linea Sepolia',
-  nativeCurrency: {
-    name: 'ETH',
-    symbol: 'ETH',
-    decimals: 18
-  },
-  rpcUrls: ['https://rpc.sepolia.linea.build'],
-  blockExplorerUrls: ['https://sepolia.lineascan.build']
-};
+class PokeService {
+  constructor(provider) {
+    this.provider = provider;
+    this.contractAddress = '0x8f119cd256a0FfFeed643E830ADCD9767a1d517F'; // Your PokemonNFT address
+  }
 
-export const pokemonService = {
-
-  async ensureLineaSepoliaNetwork() {
-    if (window.ethereum) {
-      try {
-        // Try to switch to Linea Sepolia
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: LINEA_SEPOLIA_CONFIG.chainId }],
-        });
-      } catch (switchError) {
-        // If network doesn't exist, add it
-        if (switchError.code === 4902) {
-          try {
-            await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [LINEA_SEPOLIA_CONFIG],
-            });
-          } catch (addError) {
-            throw new Error('Failed to add Linea Sepolia network');
-          }
-        } else {
-          throw new Error('Failed to switch to Linea Sepolia network');
-        }
-      }
-    }
-  },
-
-
-  // Get contract instance
-  async getContract(withSigner = false) {
+  async getContract(needSigner = false) {
     try {
-      await this.ensureLineaSepoliaNetwork();
-      const provider = new ethers.BrowserProvider(window.ethereum, {
-        name: 'Linea Sepolia',
-        chainId: 59141
-      });
-
-      console.log('Getting contract with ABI:', PokemonNFTAbi);
+      console.log('Getting contract with address:', this.contractAddress);
       
-      if (withSigner) {
-        const signer = await provider.getSigner();
-        return new ethers.Contract(CONTRACT_ADDRESS, PokemonNFTAbi, signer);
+      const provider = new ethers.BrowserProvider(this.provider);
+      let signer = null;
+      
+      if (needSigner) {
+        signer = await provider.getSigner();
+        console.log('Got signer:', await signer.getAddress());
       }
-      return new ethers.Contract(CONTRACT_ADDRESS, PokemonNFTAbi, provider);
-    } catch (error) {
-      console.error('Detailed error getting contract:', error);
-      throw new Error('Failed to connect to the game contract');
-    }
-  },
+      
+      const contract = new ethers.Contract(
+        this.contractAddress,
+        PokemonNFT.abi,
+        needSigner ? signer : provider
+      );
 
-  // Check if user is new (doesn't have starter Pokemon)
+      // Basic contract validation
+      if (!contract.interface) {
+        throw new Error('Invalid contract interface');
+      }
+
+      return { contract, signer };
+    } catch (error) {
+      console.error('Error getting contract:', error);
+      throw new Error('Failed to initialize contract: ' + error.message);
+    }
+  }
+
+
   async isNewUser(address) {
     try {
-      console.log('PokeService: Checking if user is new:', address);
-      const contract = await this.getContract();
-      const hasStarter = await contract.hasStarterPokemon(address);
-      console.log('PokeService: Has starter pokemon:', hasStarter);
-      return !hasStarter;
+      const { contract } = await this.getContract();
+      return !(await contract.hasStarterPokemon(address));
     } catch (error) {
-      console.error('PokeService: Error checking user status:', error);
+      console.error('Error checking if new user:', error);
       throw error;
     }
-  },
+  }
 
-  // Get user's Pokemon
+  async getPokemonData(pokemonId) {
+    try {
+      const { contract } = await this.getContract();
+      console.log(`Getting data for Pokemon ${pokemonId}`);
+      
+      const data = await contract.getPokemonData(ethers.getBigInt(pokemonId));
+      console.log('Pokemon data:', data);
+      
+      return {
+        name: data.name,
+        type: data.pokemonType,
+        level: Number(data.level),
+        xp: Number(data.xp),
+        isTraining: data.isTraining || false,
+        trainingStartTime: Number(data.trainingStartTime) || 0,
+        trainingGroundId: Number(data.trainingGroundId) || 0
+      };
+    } catch (error) {
+      console.error(`Error getting Pokemon ${pokemonId} data:`, error);
+      throw error;
+    }
+  }
+
   async getUserPokemon(address) {
     try {
-      console.log('PokeService: Fetching Pokemon for address:', address);
-      const contract = await this.getContract();
-      
+      const { contract } = await this.getContract();
       const starterIds = [1, 4, 7];
       const userPokemon = [];
 
-      for (const id of starterIds) {
+      for (const pokemonId of starterIds) {
         try {
-          console.log(`PokeService: Checking balance for Pokemon ${id}`);
-          const balance = await contract.balanceOf(address, id);
-          console.log(`PokeService: Balance for Pokemon ${id}:`, balance);
-          
-          if (balance > 0n) {
-            console.log(`PokeService: Fetching data for Pokemon ${id}`);
-            const pokemonData = await contract.getPokemonData(id);
-            console.log(`PokeService: Pokemon ${id} data:`, pokemonData);
-            
+          const balance = await contract.balanceOf(address, ethers.getBigInt(pokemonId));
+          console.log(`Balance for Pokemon ${pokemonId}:`, balance.toString());
+
+          if (balance > 0) {
+            const pokemonData = await this.getPokemonData(pokemonId);
             userPokemon.push({
-              id,
-              name: pokemonData.name,
-              type: pokemonData.pokemonType,
-              level: Number(pokemonData.level),
-              xp: Number(pokemonData.xp),
-              isTraining: pokemonData.isTraining,
-              trainingStartTime: Number(pokemonData.trainingStartTime)
+              id: pokemonId,
+              ...pokemonData
             });
           }
-        } catch (err) {
-          console.error(`PokeService: Error checking Pokemon ${id}:`, err);
+        } catch (error) {
+          console.error(`Error checking Pokemon ${pokemonId}:`, error);
         }
       }
-      
-      console.log('PokeService: Final user Pokemon array:', userPokemon);
+
       return userPokemon;
     } catch (error) {
-      console.error('PokeService: Error in getUserPokemon:', error);
+      console.error('Error getting user Pokemon:', error);
       throw error;
     }
-  },
-
-  // Mint starter Pokemon
-  async mintStarterPokemon(pokemonId) {
-    try {
-      const contract = await this.getContract(true);
-      
-      // Estimate gas first
-      const gasEstimate = await contract.mintStarterPokemon.estimateGas(pokemonId);
-      
-      // Add 20% buffer to gas estimate
-      const gasLimit = gasEstimate * 120n / 100n;
-
-      // Send transaction
-      const tx = await contract.mintStarterPokemon(pokemonId, {
-        gasLimit
-      });
-
-      // Wait for transaction confirmation
-      const receipt = await tx.wait();
-
-      // Get the minted Pokemon data
-      const pokemonData = await contract.getPokemonData(pokemonId);
-
-      // Return transaction details and Pokemon data
-      return {
-        success: true,
-        transactionHash: receipt.hash,
-        pokemon: {
-          id: pokemonId,
-          name: pokemonData.name,
-          type: pokemonData.pokemonType,
-          level: Number(pokemonData.level),
-          xp: Number(pokemonData.xp),
-          uri: await contract.uri(pokemonId)
-        }
-      };
-    } catch (error) {
-      console.error('Error minting starter Pokemon:', error);
-      
-      // Handle specific error cases
-      if (error.message.includes('user rejected')) {
-        throw new Error('Transaction was rejected');
-      }
-      if (error.message.includes('insufficient funds')) {
-        throw new Error('Insufficient funds for transaction');
-      }
-      throw new Error('Failed to mint starter Pokemon');
-    }
-  },
-
-  // Listen for Pokemon minted event
-  async listenToMintEvents(callback) {
-    try {
-      const contract = await this.getContract();
-      
-      // Listen for TransferSingle event (ERC1155 transfer event)
-      contract.on("TransferSingle", (operator, from, to, id, value) => {
-        if (from === ethers.ZeroAddress) { // New mint
-          callback({
-            type: 'MINT',
-            tokenId: id,
-            to: to,
-            value: value
-          });
-        }
-      });
-
-      return () => {
-        contract.removeAllListeners("TransferSingle");
-      };
-    } catch (error) {
-      console.error('Error setting up event listener:', error);
-      throw new Error('Failed to setup mint event listener');
-    }
-  },
-
-  // Get Pokemon metadata URI
-  async getPokemonMetadata(tokenId) {
-    try {
-      const contract = await this.getContract();
-      const uri = await contract.uri(tokenId);
-      const response = await fetch(uri);
-      const metadata = await response.json();
-      return metadata;
-    } catch (error) {
-      console.error('Error fetching Pokemon metadata:', error);
-      throw new Error('Failed to fetch Pokemon metadata');
-    }
-  },
+  }
 
   async startTraining(pokemonId, groundId) {
     try {
-      const contract = await this.getContract(true);
-      const gasEstimate = await contract.startTraining.estimateGas(pokemonId, groundId);
+      console.log('Starting training with params:', { pokemonId, groundId });
+      
+      const { contract, signer } = await this.getContract(true);
+      const address = await signer.getAddress();
+      
+      console.log('Contract address:', this.contractAddress);
+      console.log('Signer address:', address);
+      
+      // First check if Pokemon can start training
+      const balance = await contract.balanceOf(address, ethers.getBigInt(pokemonId));
+      console.log('Pokemon balance:', balance.toString());
+      if (balance === 0) {
+        throw new Error('You do not own this Pokemon');
+      }
+
+      // Check if Pokemon is already training
+      const pokemonData = await contract.getPokemonData(ethers.getBigInt(pokemonId));
+      console.log('Pokemon data:', pokemonData);
+      if (pokemonData.isTraining) {
+        throw new Error('Pokemon is already training');
+      }
+
+      // Get training ground cost
+      const trainingGround = await contract.getTrainingGround(ethers.getBigInt(groundId));
+      console.log('Training ground:', trainingGround);
+      
+      // Estimate gas with higher limit
+      const gasEstimate = await contract.startTraining.estimateGas(
+        ethers.getBigInt(pokemonId),
+        ethers.getBigInt(groundId),
+        { gasLimit: 500000 }
+      );
+      console.log('Gas estimate:', gasEstimate.toString());
+
+      // Add 20% buffer to gas estimate
       const gasLimit = gasEstimate * 120n / 100n;
 
-      const tx = await contract.startTraining(pokemonId, groundId, { gasLimit });
-      const receipt = await tx.wait();
+      // Send transaction with explicit parameters
+      const tx = await contract.startTraining(
+        ethers.getBigInt(pokemonId),
+        ethers.getBigInt(groundId),
+        {
+          from: address,
+          gasLimit: gasLimit,
+        }
+      );
+      console.log('Transaction sent:', tx.hash);
 
-      return {
-        success: true,
-        transactionHash: receipt.hash
-      };
+      // Wait for confirmation
+      const receipt = await tx.wait();
+      console.log('Transaction confirmed:', receipt);
+
+      if (receipt.status === 0) {
+        throw new Error('Transaction failed');
+      }
+
+      return receipt;
     } catch (error) {
-      console.error('Error starting training:', error);
+      console.error('Training error:', error);
+      
+      if (error.message.includes('insufficient funds')) {
+        throw new Error('Insufficient PokeCoin balance for training');
+      }
       if (error.message.includes('user rejected')) {
         throw new Error('Transaction was rejected');
       }
-      throw new Error('Failed to start training');
-    }
-  },
-
-  async endTraining(pokemonId, groundId) {
-    try {
-      const contract = await this.getContract(true);
       
-      // First get current Pokemon data to calculate XP gain
-      const pokemonData = await contract.getPokemonData(pokemonId);
-      const startTime = Number(pokemonData.trainingStartTime);
-      const currentTime = Math.floor(Date.now() / 1000);
-      
-      // Calculate XP gained (1 XP per minute, max 100)
-      const minutesTrained = Math.floor((currentTime - startTime) / 60);
-      const xpGained = Math.min(minutesTrained, 100); // Cap at 100 XP
-      
-      // Estimate gas for the transaction
-      const gasEstimate = await contract.endTraining.estimateGas(pokemonId, groundId);
-      const gasLimit = gasEstimate * 120n / 100n;
-
-      // End training and update XP in the same transaction
-      const tx = await contract.endTraining(pokemonId, groundId, { gasLimit });
-      const receipt = await tx.wait();
-
-      return {
-        success: true,
-        transactionHash: receipt.hash,
-        xpGained
-      };
-    } catch (error) {
-      console.error('Error ending training:', error);
-      if (error.message.includes('user rejected')) {
-        throw new Error('Transaction was rejected');
-      }
-      throw new Error('Failed to end training');
-    }
-  },
-
-  // Add a new method to get real-time XP calculation
-  async getCurrentTrainingXP(pokemonId) {
-    try {
-      const contract = await this.getContract();
-      console.log('Calculating XP for Pokemon:', pokemonId);
-      
-      // First check if Pokemon is actually training
-      const pokemonData = await contract.getPokemonData(pokemonId);
-      if (!pokemonData.isTraining) {
-        return pokemonData.xp;
-      }
-
-      // Get current XP including training progress
-      const currentXP = await contract.calculateCurrentXP(pokemonId, 1); // Using BASIC_TRAINING (1)
-      console.log('Current XP calculated:', currentXP);
-      return Number(currentXP);
-    } catch (error) {
-      console.error('Error calculating current XP:', error);
-      // Return the last known XP in case of error
-      try {
-        const contract = await this.getContract();
-        const pokemonData = await contract.getPokemonData(pokemonId);
-        return Number(pokemonData.xp);
-      } catch (fallbackError) {
-        console.error('Fallback error:', fallbackError);
-        return 0;
-      }
+      throw new Error('Failed to start training: ' + error.message);
     }
   }
-};
 
-export default pokemonService;
+  async mintStarterPokemon(pokemonId) {
+    try {
+      console.log('Minting starter Pokemon with ID:', pokemonId);
+      
+      const { contract, signer } = await this.getContract(true);
+      const address = await signer.getAddress();
+      
+      // Check if user already has a starter
+      const hasStarter = await contract.hasStarterPokemon(address);
+      if (hasStarter) {
+        throw new Error('You already have a starter Pokemon');
+      }
+
+      // Verify valid starter Pokemon ID (1 = Bulbasaur, 4 = Charmander, 7 = Squirtle)
+      if (![1, 4, 7].includes(Number(pokemonId))) {
+        throw new Error('Invalid starter Pokemon ID');
+      }
+
+      console.log('Sending mint transaction...');
+      const tx = await contract.mintStarterPokemon(
+        ethers.getBigInt(pokemonId),
+        {
+          gasLimit: 300000
+        }
+      );
+      
+      console.log('Waiting for transaction confirmation...');
+      const receipt = await tx.wait();
+      
+      if (receipt.status === 0) {
+        throw new Error('Transaction failed');
+      }
+
+      console.log('Starter Pokemon minted successfully!');
+      return receipt;
+    } catch (error) {
+      console.error('Error in mintStarterPokemon:', error);
+      if (error.message.includes('You already have a starter')) {
+        throw new Error('You already have a starter Pokemon');
+      }
+      if (error.message.includes('Invalid starter')) {
+        throw new Error('Invalid starter Pokemon selection');
+      }
+      throw new Error('Failed to mint starter Pokemon: ' + error.message);
+    }
+  }
+
+  async getCurrentTrainingXP(pokemonId) {
+    try {
+      const { contract } = await this.getContract();
+      
+      // Get Pokemon data from contract
+      const pokemon = await contract.pokemonData(ethers.getBigInt(pokemonId));
+      
+      if (!pokemon.isTraining) {
+        return pokemon.xp;
+      }
+
+      // Calculate current XP based on contract values
+      const currentTime = Math.floor(Date.now() / 1000);
+      const trainingTime = currentTime - Number(pokemon.trainingStartTime);
+      const minutesSpent = Math.floor(trainingTime / 60);
+      
+      // Use contract constants for calculations
+      const XP_PER_MINUTE = await contract.XP_PER_MINUTE();
+      const TYPE_BONUS_MULTIPLIER = await contract.TYPE_BONUS_MULTIPLIER();
+      
+      let baseXP = Number(pokemon.xp) + (minutesSpent * Number(XP_PER_MINUTE));
+      
+      // Check if type bonus applies
+      const groundId = Number(pokemon.trainingGroundId);
+      if (groundId > 0) {
+        const ground = await contract.trainingGrounds(groundId);
+        if (pokemon.pokemonType === ground.requiredType) {
+          baseXP = Math.floor((baseXP * Number(TYPE_BONUS_MULTIPLIER)) / 100);
+        }
+      }
+
+      return baseXP;
+    } catch (error) {
+      console.error('Error getting current training XP:', error);
+      throw error;
+    }
+  }
+
+  async endTraining(pokemonId) {
+    let contract;
+    try {
+      const { contract: contractInstance, signer } = await this.getContract(true);
+      contract = contractInstance;
+      
+      console.log('Checking if training can be completed for Pokemon:', pokemonId);
+      
+      // Check if we can complete training
+      const [canComplete, reason] = await contract.canCompleteTraining(ethers.getBigInt(pokemonId));
+      console.log('Can complete training?', canComplete, reason);
+      
+      if (!canComplete) {
+        throw new Error(reason);
+      }
+
+      // Call completeTraining
+      const tx = await contract.completeTraining(
+        ethers.getBigInt(pokemonId),
+        {
+          gasLimit: ethers.getBigInt(300000)
+        }
+      );
+
+      console.log('Transaction sent:', tx.hash);
+      const receipt = await tx.wait();
+      console.log('Transaction receipt:', receipt);
+
+      if (receipt.status === 0) {
+        throw new Error('Transaction failed');
+      }
+
+      // Get the TrainingCompleted event from the receipt
+      const event = receipt.logs
+        .map(log => {
+          try {
+            return contract.interface.parseLog({
+              topics: log.topics,
+              data: log.data
+            });
+          } catch (e) {
+            console.error('Failed to parse log:', e);
+            return null;
+          }
+        })
+        .find(event => event && event.name === 'TrainingCompleted');
+
+      if (!event) {
+        throw new Error('Training completion event not found');
+      }
+
+      return {
+        xpGained: Number(event.args.xpGained)
+      };
+    } catch (error) {
+      console.error('Error completing training:', error);
+      throw error;
+    }
+  }
+}
+
+export const pokemonService = new PokeService(window.ethereum);

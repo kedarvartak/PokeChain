@@ -4,6 +4,7 @@ import { useTraining } from '../context/TrainingContext';
 import { useState, useEffect } from 'react';
 import { pokemonService } from '../services/PokeService';
 import { toast } from 'react-hot-toast';
+import { TRAINING_GROUNDS } from '../pages/Training';
 
 const PokemonCard = ({ pokemon }) => {
   const { trainingPokemon, completeTraining } = useTraining();
@@ -78,16 +79,49 @@ const PokemonCard = ({ pokemon }) => {
   const handleTrainClick = async () => {
     if (isTraining) {
       try {
-        const result = await pokemonService.endTraining(pokemon.id, 1);
-        toast.success(`Training completed! Gained ${result.xpGained} XP!`);
-        setPrevXP(currentXP); // Update prevXP after training ends
+        console.log('Attempting to complete training for Pokemon:', pokemon.id);
+        
+        // Get final XP before completing training
+        const finalXP = await pokemonService.getCurrentTrainingXP(pokemon.id);
+        console.log('Final XP before completion:', finalXP);
+        
+        // Complete the training
+        await completeTraining(pokemon.id);
+        
+        // Get updated Pokemon data
+        const updatedPokemon = await pokemonService.getPokemonData(pokemon.id);
+        console.log('Updated Pokemon data:', updatedPokemon);
+        
+        // Update the UI
+        setCurrentXP(updatedPokemon.xp);
+        setPrevXP(updatedPokemon.xp);
+        
+        toast.success('Training completed successfully!');
       } catch (error) {
+        console.error('Training completion error:', error);
         toast.error(error.message);
       }
     } else {
       navigate('/training', { state: { preSelectedPokemon: pokemon.id } });
     }
   };
+
+  // Add this effect to sync with contract data when training status changes
+  useEffect(() => {
+    const syncWithContract = async () => {
+      if (!isTraining && pokemon.id) {
+        try {
+          const updatedPokemon = await pokemonService.getPokemonData(pokemon.id);
+          setCurrentXP(updatedPokemon.xp);
+          setPrevXP(updatedPokemon.xp);
+        } catch (error) {
+          console.error('Error syncing with contract:', error);
+        }
+      }
+    };
+
+    syncWithContract();
+  }, [isTraining, pokemon.id]);
 
   return (
     <motion.div

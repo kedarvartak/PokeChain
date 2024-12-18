@@ -7,6 +7,9 @@ import { toast } from 'react-hot-toast';
 import { pokemonService as PokeService } from '../services/PokeService';
 import { StarIcon } from '@heroicons/react/24/solid';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { usePokeCoin } from '../context/PokeCoinContext';
+import { CurrencyDollarIcon } from '@heroicons/react/24/solid';
+import { pokeCoinService } from '../services/PokeCoinService';
 
 const TRAINING_GROUNDS = {
   1: { 
@@ -14,9 +17,8 @@ const TRAINING_GROUNDS = {
     description: "A simple training ground suitable for all Pokemon types.",
     color: "bg-[#4ECDC4]",
     minLevel: 1,
-    image: "https://raw.githubusercontent.com/HybridShivam/Pokemon/master/assets/images/010.png",
-    requiredType: null,
-    bgPattern: "data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30L0 30z' fill='%23000000' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E"
+    image: "https://raw.githubusercontent.com/HybridShivam/Pokemon/master/assets/images/129.png",
+    requiredType: null
   },
   2: {
     name: "Fire Dojo",
@@ -24,8 +26,7 @@ const TRAINING_GROUNDS = {
     color: "bg-[#FF6B6B]",
     minLevel: 5,
     image: "https://raw.githubusercontent.com/HybridShivam/Pokemon/master/assets/images/006.png",
-    requiredType: "fire",
-    bgPattern: "data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30L0 30z' fill='%23FF0000' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E"
+    requiredType: "fire"
   },
   3: {
     name: "Water Temple",
@@ -33,8 +34,7 @@ const TRAINING_GROUNDS = {
     color: "bg-[#4ECDC4]",
     minLevel: 5,
     image: "https://raw.githubusercontent.com/HybridShivam/Pokemon/master/assets/images/009.png",
-    requiredType: "water",
-    bgPattern: "data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30L0 30z' fill='%230000FF' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E"
+    requiredType: "water"
   },
   4: {
     name: "Grass Garden",
@@ -42,9 +42,18 @@ const TRAINING_GROUNDS = {
     color: "bg-[#95D44A]",
     minLevel: 5,
     image: "https://raw.githubusercontent.com/HybridShivam/Pokemon/master/assets/images/003.png",
-    requiredType: "grass",
-    bgPattern: "data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30L0 30z' fill='%2300FF00' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E"
+    requiredType: "grass"
   }
+};
+
+const getTypeBonus = (groundId, pokemonType) => {
+  const typeMatchings = {
+    2: "Fire",    // Fire Dojo
+    3: "Water",   // Water Temple
+    4: "Grass"    // Grass Garden
+  };
+  
+  return typeMatchings[groundId] === pokemonType;
 };
 
 const Training = () => {
@@ -55,6 +64,9 @@ const Training = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
+  const { balance } = usePokeCoin();
+  const { address } = useWallet();
+  const [isApproving, setIsApproving] = useState(false);
 
   useEffect(() => {
     if (location.state?.preSelectedPokemon) {
@@ -63,174 +75,250 @@ const Training = () => {
   }, [location]);
 
   const handleStartTraining = async (pokemonId, groundId) => {
-    setIsProcessing(true);
+    if (!pokemonId || !groundId || !address) return;
+    
     try {
+      setIsProcessing(true);
+      const cost = TRAINING_COSTS[groundId];
+      
+      const pokemonNFTAddress = '0x4DAf17c8142A483B2E2348f56ae0F2cFDAe22ceE';
+      
+      // Check balance first
+      if (parseFloat(balance) < cost) {
+        toast.error('Insufficient PokeCoin balance');
+        return;
+      }
+      
+      // Check allowance first
+      const allowance = await pokeCoinService.getAllowance(
+        address,
+        pokemonNFTAddress
+      );
+
+      // If allowance is less than cost, request approval
+      if (parseFloat(allowance) < cost) {
+        setIsApproving(true);
+        try {
+          await pokeCoinService.approve(pokemonNFTAddress, cost);
+          toast.success('Approval successful');
+        } catch (error) {
+          console.error('Approval error:', error);
+          toast.error('Failed to approve PokeCoin spend');
+          return;
+        } finally {
+          setIsApproving(false);
+        }
+      }
+
+      // Start training
       await PokeService.startTraining(pokemonId, groundId);
       toast.success('Training started successfully!');
-      navigate('/profile');
     } catch (error) {
-      toast.error(error.message);
+      console.error('Error starting training:', error);
+      toast.error(error.message || 'Failed to start training');
     } finally {
       setIsProcessing(false);
+      setIsApproving(false);
     }
   };
 
-  const getTypeBonus = (groundId, pokemonType) => {
-    const ground = TRAINING_GROUNDS[groundId];
-    if (!ground.requiredType || !pokemonType) return false;
-    return ground.requiredType.toLowerCase() === pokemonType.toLowerCase();
+  const hasTypeBonus = (groundId, pokemon) => {
+    if (!pokemon || groundId === 1) return false; // No bonus for basic training
+    return getTypeBonus(groundId, pokemon.type);
+  };
+
+  const TRAINING_COSTS = {
+    1: 5,  // Basic Training
+    2: 10, // Fire Dojo
+    3: 10, // Water Temple
+    4: 10  // Grass Garden
+  };
+
+  const TrainingGroundCard = ({ ground, id }) => {
+    const cost = TRAINING_COSTS[id];
+    const hasEnoughCoins = parseFloat(balance) >= cost;
+
+    return (
+      <motion.div
+        key={id}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => setSelectedGround(id)}
+        className={`bg-white border-4 cursor-pointer transition-all duration-200
+                  ${selectedGround === id 
+                    ? `border-[${ground.color.slice(3)}] bg-[${ground.color.slice(3)}]/10 
+                       shadow-none translate-x-[4px] translate-y-[4px]` 
+                    : 'border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'}`}
+      >
+        <div className="flex items-center gap-4 p-4">
+          <div className={`relative ${selectedGround === id ? 'after:content-["✓"] after:absolute after:-top-2 after:-right-2 after:bg-[#4ECDC4] after:w-6 after:h-6 after:flex after:items-center after:justify-center after:border-2 after:border-black after:font-bold' : ''}`}>
+            <img 
+              src={ground.image}
+              alt={ground.name}
+              className="w-16 h-16 object-contain"
+            />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <h3 className="font-black">{ground.name}</h3>
+              {hasTypeBonus(id, userPokemon.find(p => p.id === selectedPokemon)?.type) && (
+                <span className="text-sm px-2 py-1 bg-[#FFD93D] border-2 border-black font-bold flex items-center gap-1">
+                  <StarIcon className="w-4 h-4" />
+                  1.5x XP
+                </span>
+              )}
+            </div>
+            <p className="text-sm mt-1">{ground.description}</p>
+            <span className="text-sm mt-2 inline-block px-2 py-1 bg-black text-white font-bold">
+              Min Level {ground.minLevel}
+            </span>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CurrencyDollarIcon className="w-5 h-5" />
+            <span className={`font-bold ${hasEnoughCoins ? 'text-black' : 'text-red-500'}`}>
+              {cost} PKC
+            </span>
+          </div>
+          {!hasEnoughCoins && (
+            <span className="text-sm text-red-500 font-bold">
+              Insufficient balance
+            </span>
+          )}
+        </div>
+      </motion.div>
+    );
   };
 
   if (!isConnected) return <Navigate to="/" />;
   if (loading) return <LoadingSpinner text="LOADING TRAINING GROUNDS" />;
 
   return (
-    <div className="min-h-screen pt-36 ">
-      {/* Hero Section */}
-      <div className="relative h-[40vh] overflow-hidden border-b-4 border-black">
-        <div className="absolute inset-0">
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <motion.div
-            initial={{ y: -100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="text-center z-10"
-          >
-            <h1 className="text-6xl font-black bg-white border-4 border-black p-8 
-                         shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-              TRAINING GROUNDS
-            </h1>
-          </motion.div>
+    <div className="min-h-screen bg-[#F7F9FC] p-8 pt-36">
+      {/* Simple Header */}
+      <div className="max-w-6xl mx-auto mb-12 text-center">
+        <h1 className="text-4xl font-black bg-yellow-400 inline-block px-8 py-4 
+                    border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          TRAINING GROUNDS
+        </h1>
+      </div>
+
+      <div className="max-w-6xl mx-auto mb-8 flex justify-end">
+        <div className="flex items-center gap-2 bg-white border-4 border-black p-4 
+                      shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <span className="font-bold">Your Balance:</span>
+          <div className="flex items-center gap-2 bg-[#FFD93D] px-3 py-1 border-2 border-black">
+            <CurrencyDollarIcon className="w-5 h-5" />
+            <span className="font-black">{parseFloat(balance).toFixed(0)} PKC</span>
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="grid lg:grid-cols-12 gap-8">
-          {/* Pokemon Selection Panel */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white border-4 border-black p-6 
-                         shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-              <h2 className="text-2xl font-black mb-6 pb-4 border-b-4 border-black">
-                YOUR POKEMON
-              </h2>
-              <div className="space-y-4">
-                {userPokemon.map((pokemon) => (
-                  <motion.div
-                    key={pokemon.id}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setSelectedPokemon(pokemon)}
-                    className={`relative overflow-hidden cursor-pointer
-                              border-4 border-black p-4 transition-all duration-200
-                              ${selectedPokemon?.id === pokemon.id 
-                                ? 'bg-[#FFD93D]' 
-                                : 'bg-white hover:bg-gray-50'}`}
-                  >
-                    <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-8">
+          {/* Left Column: Pokemon Selection */}
+          <div>
+            <h2 className="font-black text-xl mb-4 flex items-center gap-2">
+              SELECT POKEMON
+              {selectedPokemon && (
+                <span className="text-sm px-3 py-1 bg-[#FFD93D] border-2 border-black">
+                  ✓ {selectedPokemon.name} selected
+                </span>
+              )}
+            </h2>
+            <div className="space-y-4">
+              {userPokemon.map((pokemon) => (
+                <motion.div
+                  key={pokemon.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setSelectedPokemon(pokemon)}
+                  className={`bg-white border-4 cursor-pointer transition-all duration-200
+                            ${selectedPokemon?.id === pokemon.id 
+                              ? 'border-[#FFD93D] bg-[#FFD93D]/10 shadow-none translate-x-[4px] translate-y-[4px]' 
+                              : 'border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'}`}
+                >
+                  <div className="flex items-center gap-4 p-4">
+                    <div className={`relative ${selectedPokemon?.id === pokemon.id ? 'after:content-["✓"] after:absolute after:-top-2 after:-right-2 after:bg-[#FFD93D] after:w-6 after:h-6 after:flex after:items-center after:justify-center after:border-2 after:border-black after:font-bold' : ''}`}>
                       <img
                         src={`https://raw.githubusercontent.com/HybridShivam/Pokemon/master/assets/images/${String(pokemon.id).padStart(3, '0')}.png`}
                         alt={pokemon.name}
-                        className="w-20 h-20 object-contain"
+                        className="w-16 h-16 object-contain"
                       />
-                      <div>
-                        <h3 className="font-black text-lg">{pokemon.name}</h3>
-                        <div className="flex gap-2 mt-2">
-                          <span className="px-2 py-1 text-sm bg-[#4ECDC4] border-2 border-black font-bold">
-                            Lvl {pokemon.level}
-                          </span>
-                          <span className="px-2 py-1 text-sm bg-[#FF6B6B] border-2 border-black font-bold">
-                            {pokemon.type}
-                          </span>
-                        </div>
+                    </div>
+                    <div>
+                      <h3 className="font-black">{pokemon.name}</h3>
+                      <div className="flex gap-2 mt-1">
+                        <span className="text-sm px-2 py-1 bg-[#4ECDC4] border-2 border-black font-bold">
+                          Lvl {pokemon.level}
+                        </span>
+                        <span className="text-sm px-2 py-1 bg-[#FF6B6B] border-2 border-black font-bold">
+                          {pokemon.type}
+                        </span>
                       </div>
                     </div>
-                  </motion.div>
-                ))}
-              </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
 
-          {/* Training Grounds Grid */}
-          <div className="lg:col-span-8">
-            <div className="grid md:grid-cols-2 gap-6">
-              {Object.entries(TRAINING_GROUNDS).map(([id, ground]) => {
-                const hasTypeBonus = selectedPokemon && 
-                  getTypeBonus(id, userPokemon.find(p => p.id === selectedPokemon)?.type);
-
-                return (
-                  <motion.div
-                    key={id}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setSelectedGround(id)}
-                    className={`relative overflow-hidden cursor-pointer
-                              border-4 border-black transition-all duration-200
-                              ${selectedGround === id 
-                                ? `${ground.color} shadow-none translate-x-[4px] translate-y-[4px]` 
-                                : 'bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]'}`}
-                    
-                  >
-                    <div className="p-6">
-                      <div className="flex gap-6">
-                        <img 
-                          src={ground.image}
-                          alt={ground.name}
-                          className="w-32 h-32 object-contain"
-                        />
-                        <div>
-                          <h3 className="text-2xl font-black mb-2">{ground.name}</h3>
-                          <p className="font-bold mb-2">{ground.description}</p>
-                          <p className="font-bold">Min Level: {ground.minLevel}</p>
-                          {hasTypeBonus && (
-                            <div className="mt-3 inline-flex items-center gap-2 
-                                        bg-[#FFD93D] border-2 border-black p-2">
-                              <StarIcon className="w-6 h-6" />
-                              <span className="font-black">1.5x XP BONUS!</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+          {/* Right Column: Training Grounds */}
+          <div>
+            <h2 className="font-black text-xl mb-4 flex items-center gap-2">
+              SELECT TRAINING GROUND
+              {selectedGround && (
+                <span className="text-sm px-3 py-1 bg-[#4ECDC4] border-2 border-black">
+                  ✓ {TRAINING_GROUNDS[selectedGround].name} selected
+                </span>
+              )}
+            </h2>
+            <div className="space-y-4">
+              {Object.entries(TRAINING_GROUNDS).map(([id, ground]) => (
+                <TrainingGroundCard key={id} ground={ground} id={id} />
+              ))}
             </div>
+          </div>
+        </div>
 
-            {/* Training Action Panel */}
-            <motion.div
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              className="mt-8 bg-white border-4 border-black p-6 
-                       shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
+        {/* Bottom Action Bar */}
+        <div className="mt-8 bg-white border-4 border-black p-4 
+                     shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className={`w-3 h-3 rounded-full ${selectedPokemon ? 'bg-[#FFD93D]' : 'bg-gray-300'}`} />
+              <div className={`w-3 h-3 rounded-full ${selectedGround ? 'bg-[#4ECDC4]' : 'bg-gray-300'}`} />
+              <p className="font-bold">
+                {!selectedPokemon 
+                  ? "Select a Pokemon" 
+                  : !selectedGround 
+                    ? "Choose a training ground" 
+                    : "Ready to start training!"}
+              </p>
+              {selectedGround && (
+                <span className="font-bold">
+                  Cost: {TRAINING_COSTS[selectedGround]} PKC
+                </span>
+              )}
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => handleStartTraining(selectedPokemon?.id, selectedGround)}
+              disabled={!selectedGround || !selectedPokemon || isProcessing || isApproving || 
+                       parseFloat(balance) < TRAINING_COSTS[selectedGround]}
+              className="px-6 py-3 bg-[#FFD93D] font-black border-4 border-black 
+                       shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]
+                       disabled:opacity-50 disabled:cursor-not-allowed
+                       hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]
+                       transition-all duration-200"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-black mb-2">Ready to Train?</h3>
-                  <p className="font-bold text-gray-600">
-                    {!selectedPokemon 
-                      ? "Select a Pokemon to begin" 
-                      : !selectedGround 
-                        ? "Choose a training ground" 
-                        : "All set! Start training"}
-                  </p>
-                </div>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleStartTraining(selectedPokemon?.id, selectedGround)}
-                  disabled={!selectedGround || !selectedPokemon || isProcessing}
-                  className="px-8 py-4 bg-[#FFD93D] font-black text-xl border-4 border-black 
-                           shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]
-                           disabled:opacity-50 disabled:cursor-not-allowed
-                           hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]
-                           transition-all duration-200"
-                >
-                  {isProcessing ? 'STARTING TRAINING...' : 'START TRAINING!'}
-                </motion.button>
-              </div>
-            </motion.div>
+              {isProcessing ? <LoadingSpinner /> :
+               isApproving ? 'APPROVING...' :
+               parseFloat(balance) < TRAINING_COSTS[selectedGround] ? 
+               'INSUFFICIENT BALANCE' : 'START TRAINING'}
+            </motion.button>
           </div>
         </div>
       </div>
@@ -239,7 +327,13 @@ const Training = () => {
       {isProcessing && (
         <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 
                      flex items-center justify-center">
-          <LoadingSpinner text="STARTING TRAINING" />
+          <div className="bg-white border-4 border-black p-6 max-w-sm w-full
+                       shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <div className="flex flex-col items-center gap-4">
+              <LoadingSpinner />
+              <p className="font-bold">Starting Training...</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

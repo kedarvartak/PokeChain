@@ -23,26 +23,27 @@ export function TrainingProvider({ children }) {
   useEffect(() => {
     if (!address) return;
 
-    const checkTrainingStatus = async () => {
-      try {
-        const contract = await PokeService.getContract();
-        
-        const trainingStatus = {};
-        for (const pokemon of userPokemon) {
-          const pokemonData = await contract.getPokemonData(pokemon.id);
-          if (pokemonData.isTraining) {
-            trainingStatus[pokemon.id] = {
-              startTime: Number(pokemonData.trainingStartTime),
-              isTraining: true,
-              groundId: Number(pokemonData.trainingGroundId)
-            };
-          }
-        }
-        setTrainingPokemon(trainingStatus);
-      } catch (error) {
-        console.error('Error checking training status:', error);
+    // Inside checkTrainingStatus function
+const checkTrainingStatus = async () => {
+  try {
+    const { contract } = await PokeService.getContract(); // Destructure to get contract
+    
+    const trainingStatus = {};
+    for (const pokemon of userPokemon) {
+      const pokemonData = await contract.getPokemonData(pokemon.id);
+      if (pokemonData.isTraining) {
+        trainingStatus[pokemon.id] = {
+          startTime: Number(pokemonData.trainingStartTime),
+          isTraining: true,
+          groundId: Number(pokemonData.trainingGroundId)
+        };
       }
-    };
+    }
+    setTrainingPokemon(trainingStatus);
+  } catch (error) {
+    console.error('Error checking training status:', error);
+  }
+};
 
     const interval = setInterval(checkTrainingStatus, 30000);
     checkTrainingStatus(); // Initial check

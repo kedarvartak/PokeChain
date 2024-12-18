@@ -40,14 +40,15 @@ const Marketplace = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-36">
+    <div className="min-h-screen bg-gray-50 pt-24">
       <div className="max-w-7xl mx-auto px-4 py-12">
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-black inline-block bg-[#4ECDC4] border-4 border-black p-6 
-                         shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            POKÉ MART
-          </h1>
-        </div>
+      <div className="max-w-6xl mx-auto mb-12 text-center">
+        <h1 className="text-4xl font-black bg-yellow-400 inline-block px-8 py-4 
+                    border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          POKÉ MART
+        </h1>
+      </div>
+        
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {items.map((item) => (

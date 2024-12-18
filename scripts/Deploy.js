@@ -2,26 +2,47 @@
 const hre = require("hardhat");
 
 async function main() {
-  // Get the contract factory
-  const PokemonNFT = await hre.ethers.getContractFactory("PokemonNFT");
+  try {
+    // Get existing PokeCoin contract
+    console.log("Getting existing PokeCoin contract...");
+    const PokeCoin = await hre.ethers.getContractFactory("PokeCoin");
+    // Use the most recently deployed PokeCoin address ithe takaychay address
+    const pokeCoin = PokeCoin.attach("0x4f42528B7bF8Da96516bECb22c1c6f53a8Ac7312"); // Latest deployed address
+    console.log("Found PokeCoin at:", await pokeCoin.getAddress());
 
-  // Deploy the contract
-  console.log("Deploying PokemonNFT...");
-  const pokemonNFT = await PokemonNFT.deploy();
+    // Deploy PokemonNFT
+    console.log("\nDeploying PokemonNFT...");
+    const PokemonNFT = await hre.ethers.getContractFactory("PokemonNFT");
+    const pokemonNFT = await PokemonNFT.deploy();
+    await pokemonNFT.waitForDeployment();
+    const pokemonNFTAddress = await pokemonNFT.getAddress();
+    console.log("PokemonNFT deployed to:", pokemonNFTAddress);
 
-  // Wait for deployment to finish
-  await pokemonNFT.waitForDeployment();
+    await pokemonNFT.deploymentTransaction().wait(2);
 
-  // Get the deployed contract address
-  const address = await pokemonNFT.getAddress();
-  console.log("PokemonNFT deployed to:", address);
+    // Link contracts
+    console.log("\nLinking contracts...");
+    const setPokeCoinTx = await pokemonNFT.setPokeCoinContract(await pokeCoin.getAddress());
+    await setPokeCoinTx.wait(2);
+    
+    // Add PokemonNFT as minter
+    console.log("Adding PokemonNFT as minter...");
+    const addMinterTx = await pokeCoin.addMinter(pokemonNFTAddress);
+    await addMinterTx.wait(2);
+    
+    console.log("Contracts linked and permissions set successfully");
 
-  // Wait for a few block confirmations
-  console.log("Waiting for block confirmations...");
-  await pokemonNFT.deploymentTransaction().wait(5);
+    console.log("\nDeployment Summary:");
+    console.log("-------------------");
+    console.log("PokeCoin:", await pokeCoin.getAddress());
+    console.log("PokemonNFT:", pokemonNFTAddress);
+
+  } catch (error) {
+    console.error("Deployment error:", error);
+    throw error;
+  }
 }
 
-// Execute the deployment
 main()
   .then(() => process.exit(0))
   .catch((error) => {

@@ -1,4 +1,3 @@
-
 {
     "abi": [
       {
@@ -143,6 +142,24 @@
           }
         ],
         "stateMutability": "view",
+        "type": "function"
+      },
+      {
+        "inputs": [
+          {
+            "internalType": "uint256",
+            "name": "pokemonId",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "groundId",
+            "type": "uint256"
+          }
+        ],
+        "name": "startTraining",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
       }
     ]
