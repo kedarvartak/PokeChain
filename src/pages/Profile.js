@@ -10,6 +10,7 @@ import TrainingProgress from '../components/TrainingProgress';
 import { useTraining } from '../context/TrainingContext';
 import { toast } from 'react-hot-toast';
 import { pokemonService } from '../services/PokeService';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const ITEM_IMAGES = {
   1: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png',
@@ -57,10 +58,8 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <div className="text-center py-20">
-        <h2 className="text-4xl font-black mb-4 bg-white border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-          LOADING...
-        </h2>
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner text="LOADING PROFILE" />
       </div>
     );
   }
